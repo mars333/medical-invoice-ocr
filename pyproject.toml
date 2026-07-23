@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "medical-invoice-ocr"
+version = "0.1.0"
+description = "使用 PaddleOCR 将医院收费票据图片批量转换为固定格式 Excel"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+license = {text = "MIT"}
+dependencies = [
+  "paddlepaddle==3.3.1",
+  "paddleocr==3.7.0",
+  "openpyxl==3.1.5",
+  "Pillow==12.3.0",
+  "PyYAML==6.0.2",
+]
+
+[project.scripts]
+medical-invoice-ocr = "medical_invoice_ocr.cli:main"
+medical-invoice-ocr-gui = "medical_invoice_ocr.gui:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+medical_invoice_ocr = ["resources/*", "resources/**/*"]
