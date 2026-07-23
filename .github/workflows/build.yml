@@ -1,0 +1,121 @@
+name: Build and Release Windows
+
+# 与 pdf-splitter 的发布方式一致：
+# - 手动触发：构建并上传 workflow artifact，不创建 Release。
+# - 推送 v* 标签：构建完整免安装包，并自动创建 GitHub Release。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pyinstaller
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = Join-Path $PWD "src"
+          python -m unittest discover -s tests -v
+
+      - name: Restore PaddleOCR model cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.paddlex/official_models
+          key: windows-paddleocr-pp-ocrv6-medium-v1
+
+      - name: Download PaddleOCR models
+        shell: pwsh
+        env:
+          PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+        run: |
+          python -c "from paddleocr import PaddleOCR; PaddleOCR(lang='ch', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False, enable_mkldnn=False)"
+
+          $modelRoot = Join-Path `
+            ([Environment]::GetFolderPath("UserProfile")) `
+            ".paddlex\official_models"
+          $required = @(
+            (Join-Path $modelRoot "PP-OCRv6_medium_det"),
+            (Join-Path $modelRoot "PP-OCRv6_medium_rec")
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "PaddleOCR model was not downloaded: $path"
+            }
+          }
+
+      - name: Build Windows application
+        shell: pwsh
+        run: ./build_exe.ps1
+
+      - name: Verify release directory
+        shell: pwsh
+        run: |
+          $required = @(
+            "dist\medical-invoice-excel\医院票据识别工具.exe",
+            "dist\medical-invoice-excel\_internal\medical_invoice_ocr\resources\template.xlsx",
+            "dist\medical-invoice-excel\models\PP-OCRv6_medium_det\inference.json",
+            "dist\medical-invoice-excel\models\PP-OCRv6_medium_rec\inference.json",
+            "dist\medical-invoice-excel\使用说明.md"
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Missing release file: $path"
+            }
+          }
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          $archive = "dist\medical-invoice-excel-windows-x64.zip"
+          Compress-Archive `
+            -LiteralPath "dist\medical-invoice-excel" `
+            -DestinationPath $archive `
+            -CompressionLevel Optimal `
+            -Force
+          Get-Item -LiteralPath $archive |
+            Select-Object FullName, Length, LastWriteTime
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: medical-invoice-excel-windows-x64
+          path: dist/medical-invoice-excel-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/medical-invoice-excel-windows-x64.zip
+          generate_release_notes: true

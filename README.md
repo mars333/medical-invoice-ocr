@@ -40,6 +40,21 @@ dist/medical-invoice-excel/
 `医院票据识别工具.exe`，不需要安装 Python，也不需要联网下载模型。
 不要只单独复制 EXE；`models` 和 `_internal` 目录是运行所必需的。
 
+## GitHub Actions 与 Release
+
+仓库包含 `.github/workflows/build.yml`：
+
+- 在 GitHub Actions 页面手动运行时，构建 Windows 免安装 ZIP，并作为
+  workflow artifact 保存 14 天。
+- 推送 `v*` 标签（例如 `v1.0.0`）时，自动构建同一份 ZIP，并创建
+  GitHub Release。
+
+发布产物名为：
+
+```text
+medical-invoice-excel-windows-x64.zip
+```
+
 ## 命令行
 
 ```powershell
