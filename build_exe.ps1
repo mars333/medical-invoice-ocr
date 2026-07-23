@@ -1,6 +1,11 @@
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Python = Join-Path $Root ".venv\Scripts\python.exe"
+$VenvPython = Join-Path $Root ".venv\Scripts\python.exe"
+$Python = if (Test-Path -LiteralPath $VenvPython) {
+  $VenvPython
+} else {
+  (Get-Command python -ErrorAction Stop).Source
+}
 $Dist = Join-Path $Root "dist\medical-invoice-excel"
 $Models = Join-Path $Dist "models"
 $OfficialModels = Join-Path `
